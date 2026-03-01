@@ -15,7 +15,6 @@ USE FanHub;
 GO
 
 DROP TABLE IF EXISTS PublicacionEtiqueta;
-
 DROP TABLE IF EXISTS PublicacionEtiqueta;
 DROP TABLE IF EXISTS Etiqueta;
 DROP TABLE IF EXISTS UsuarioReaccionPublicacion;
@@ -100,7 +99,7 @@ CREATE TABLE Factura
 (
 	id 			INT IDENTITY(1,1) PRIMARY KEY,
 	idSuscripcion 		INT REFERENCES Suscripcion(id),
-	codigo_transaccion 	INTEGER,
+	codigo_transaccion 	VARCHAR(64),
 	fecha_emision 		DATE,
 	sub_total 		DECIMAL(10, 2) CHECK (sub_total >= 0),
 	monto_impuesto 		DECIMAL(10, 2) CHECK (monto_impuesto >= 0),
