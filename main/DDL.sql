@@ -15,7 +15,6 @@ USE FanHub;
 GO
 
 DROP TABLE IF EXISTS PublicacionEtiqueta;
-DROP TABLE IF EXISTS PublicacionEtiqueta;
 DROP TABLE IF EXISTS Etiqueta;
 DROP TABLE IF EXISTS UsuarioReaccionPublicacion;
 DROP TABLE IF EXISTS TipoReaccion;
