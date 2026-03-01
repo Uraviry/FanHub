@@ -597,7 +597,7 @@ INSERT INTO Suscripcion (idUsuario, idNivel, fecha_inicio, fecha_renovacion, fec
 (99, 22, '2024-01-20', '2024-02-20', NULL, 'Activa', 5.00),
 (100, 5, '2024-01-25', '2024-02-25', NULL, 'Activa', 5.00),
 
--- Usuarios 101 a 150 (Multi-suscripción)
+-- Usuarios 101 a 150 (Multi-suscripción).
 (101, 6, '2024-01-03', '2024-02-03', NULL, 'Activa', 15.00),
 (101, 18, '2024-01-10', '2024-02-10', NULL, 'Activa', 40.00),
 (102, 19, '2024-01-07', '2024-02-07', NULL, 'Activa', 90.00),
