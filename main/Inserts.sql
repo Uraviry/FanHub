@@ -4173,3 +4173,17 @@ INSERT INTO UsuarioReaccionPublicacion (idUsuario, idPublicacion, idTipoReaccion
 (15, 73, 3, '2024-03-06'), (88, 74, 3, '2024-03-07'), (120, 75, 3, '2024-03-11'),
 (2, 76, 3, '2024-03-12'), (55, 77, 3, '2024-03-16'), (99, 78, 3, '2024-03-17'),
 (140, 79, 3, '2024-03-21'), (201, 80, 3, '2024-03-22');
+
+INSERT INTO UsuarioReaccionPublicacion (idUsuario, idPublicacion, idTipoReaccion, fecha_reaccion) VALUES
+(1, 9, 1, '2024-05-22'),
+(2, 10, 2, '2024-05-23'),
+(6, 14, 1, '2024-05-21'),
+(29, 15, 3, '2024-05-22'),
+(25, 11, 1, '2024-05-24');
+
+INSERT INTO UsuarioReaccionPublicacion (idUsuario, idPublicacion, idTipoReaccion, fecha_reaccion) VALUES
+(26, 9, 1, '2024-05-25'),
+(30, 14, 2, '2024-05-24'),
+(1, 11, 3, '2024-05-26'),
+(6, 15, 1, '2024-05-23'),
+(2, 12, 4, '2024-05-27');
