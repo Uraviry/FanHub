@@ -5331,3 +5331,40 @@ INSERT INTO Comentario (idUsuario, idPublicacion, idComentarioPadre, texto, fech
 (115, 939, NULL, '¿Podrías hablar de cómo conseguir los primeros clientes?', '2026-03-21 12:45:00'),
 (152, 150, NULL, 'Este post me ha dado una perspectiva totalmente nueva.', '2026-03-21 13:00:00'),
 (245, 12, NULL, 'Eres un referente en el sector, sigue así.', '2026-03-21 13:15:00');
+
+INSERT INTO Comentario (idUsuario, idPublicacion, idComentarioPadre, texto, fecha) VALUES
+
+(1, 948, NULL, '¡Por fin el secreto revelado! No me esperaba que fuera esa especia.', '2026-03-01 10:00:00'),
+
+(30, 956, NULL, 'Ver estos bocetos iniciales ayuda mucho a entender tu flujo de trabajo.', '2026-03-01 10:15:00'),
+
+(25, 953, NULL, 'La hice ayer para una cena y quedaron todos impresionados. ¡Gracias!', '2026-03-01 11:00:00'),
+
+(6, 963, NULL, '¡Qué envidia de setup tienes en Madrid! Muy inspirador el orden que mantienes.', '2026-03-01 11:30:00'),
+
+(2, 950, NULL, 'Se ve increíble. ¿El próximo evento VIP será en el mismo sitio?', '2026-03-01 12:00:00');
+
+INSERT INTO Etiqueta (nombre) VALUES 
+('Gaming'), ('Vlog'), ('Musica'), ('Arte'), ('Cocina'), ('Fitness'), ('Tecnologia'), ('Moda'), ('Viajes'), ('Educacion'),
+('ASMR'), ('Productividad'), ('Reseña'), ('Noticias'), ('Comedia'), ('Deportes'), ('DIY'), ('Cine'), ('Fotografia'), ('Baile'),
+('Finanzas'), ('Salud'), ('Programacion'), ('Anime'), ('Mascotas'), ('Lectura'), ('Historia'), ('Ciencia'), ('Motor'), ('Maquillaje'),
+('Entrevista'), ('Tutorial'), ('Podcast'), ('Reto'), ('Curiosidades'), ('Terror'), ('Naturaleza'), ('Espiritualidad'), ('Minimalismo'), ('Negocios'),
+('Cripto'), ('Manualidades'), ('Psicologia'), ('Arquitectura'), ('Diseño'), ('Humor'), ('Cultura'), ('Idiomas'), ('JuegosMesa'), ('Ecodiseño');
+
+INSERT INTO PublicacionEtiqueta (idPublicacion, idEtiqueta)
+SELECT TOP (SELECT COUNT(*) * 2 FROM Publicacion) 
+    idPublicacion, 
+    idEtiqueta
+FROM (
+    SELECT DISTINCT 
+        p.id AS idPublicacion, 
+        e.id AS idEtiqueta
+    FROM Publicacion p
+    CROSS JOIN Etiqueta e
+    WHERE NOT EXISTS (
+        SELECT 1 FROM PublicacionEtiqueta pe 
+        WHERE pe.idPublicacion = p.id AND pe.idEtiqueta = e.id
+    )
+) AS CombinacionesLimpias
+ORDER BY NEWID();
+GO
