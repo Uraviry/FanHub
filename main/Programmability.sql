@@ -120,3 +120,45 @@
         END CATCH
     END;
     GO
+
+    -- Función para publicar con etiquetas
+    CREATE PROCEDURE dbo.sp_publicar_con_etiquetas
+    @idCreador INT, @tipo VARCHAR(10), @titulo VARCHAR(128), 
+    @es_nsfw BIT, @etiquetas_csv VARCHAR(MAX), @url VARCHAR(255)
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+        BEGIN TRY
+            BEGIN TRANSACTION;
+
+            -- Insertar Publicación
+            INSERT INTO Publicacion (idCreador, tipo_contenido, titulo, fecha_publicacion, es_nsfw, esta_activa)
+            VALUES (@idCreador, @tipo, @titulo, GETDATE(), @es_nsfw, 1);
+
+            DECLARE @id INT = SCOPE_IDENTITY();
+
+            -- Insertar en tabla hija según el tipo
+            IF @tipo = 'Video'  INSERT INTO Video (idPublicacion, url_stream) VALUES (@id, @url);
+            IF @tipo = 'Imagen' INSERT INTO Imagen (idPublicacion, url_imagen) VALUES (@id, @url);
+            IF @tipo = 'Texto'  INSERT INTO Texto (idPublicacion, resumen_gratuito) VALUES (@id, @url);
+
+            -- Etiquetas (Insertar nuevas y relacionar)
+            INSERT INTO Etiqueta (nombre)
+            SELECT DISTINCT value FROM STRING_SPLIT(@etiquetas_csv, ',')
+            WHERE value NOT IN (SELECT nombre FROM Etiqueta);
+
+            INSERT INTO PublicacionEtiqueta (idPublicacion, idEtiqueta)
+            SELECT @id, e.id FROM Etiqueta e 
+            JOIN STRING_SPLIT(@etiquetas_csv, ',') s ON e.nombre = s.value;
+
+            COMMIT TRANSACTION;
+        END TRY
+        BEGIN CATCH
+            IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+            DECLARE @msg NVARCHAR(4000) = ERROR_MESSAGE();
+            RAISERROR(@msg, 16, 1);
+        END CATCH
+    END;
+    GO
+
+    -- Falta sp_dashboard_creador y los dos triggers
