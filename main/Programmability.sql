@@ -51,7 +51,7 @@
         FROM Usuario
         WHERE id = @idCreador;
 
-        -- Fórmula del puntaje de reputación: (Subs * 0.5) + (Reacciones * 0.1) + (Antigüedad * 2)
+        -- Fórmula del puntaje de reputación
         SET @puntaje = (@subsActivos * 0.5) + (@reaccionesMes * 0.1) + (@antiguedadMeses * 2);
 
         -- Tope máximo de 100
@@ -116,15 +116,19 @@
         END TRY
         BEGIN CATCH
             IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION; -- Si hubo error, deshace la suscripción y la factura
-            THROW; -- Lanza el error hacia arriba
+            THROW;
         END CATCH
     END;
     GO
 
     -- Función para publicar con etiquetas
     CREATE PROCEDURE dbo.sp_publicar_con_etiquetas
-    @idCreador INT, @tipo VARCHAR(10), @titulo VARCHAR(128), 
-    @es_nsfw BIT, @etiquetas_csv VARCHAR(MAX), @url VARCHAR(255)
+    @idCreador INT, 
+    @tipo VARCHAR(10), 
+    @titulo VARCHAR(128), 
+    @es_publica BIT,
+    @etiquetas_publicacion VARCHAR(MAX), 
+    @url VARCHAR(255)
     AS
     BEGIN
         SET NOCOUNT ON;
@@ -132,8 +136,8 @@
             BEGIN TRANSACTION;
 
             -- Insertar Publicación
-            INSERT INTO Publicacion (idCreador, tipo_contenido, titulo, fecha_publicacion, es_nsfw, esta_activa)
-            VALUES (@idCreador, @tipo, @titulo, GETDATE(), @es_nsfw, 1);
+            INSERT INTO Publicacion (idCreador, titulo, fecha_publicacion, es_publica, tipo_contenido)
+            VALUES (@idCreador, @titulo, GETDATE(), @es_publica, UPPER(@tipo));
 
             DECLARE @id INT = SCOPE_IDENTITY();
 
@@ -142,23 +146,122 @@
             IF @tipo = 'Imagen' INSERT INTO Imagen (idPublicacion, url_imagen) VALUES (@id, @url);
             IF @tipo = 'Texto'  INSERT INTO Texto (idPublicacion, resumen_gratuito) VALUES (@id, @url);
 
-            -- Etiquetas (Insertar nuevas y relacionar)
+            -- Etiquetas
             INSERT INTO Etiqueta (nombre)
-            SELECT DISTINCT value FROM STRING_SPLIT(@etiquetas_csv, ',')
+            SELECT DISTINCT value FROM STRING_SPLIT(@etiquetas_publicacion, ',')
             WHERE value NOT IN (SELECT nombre FROM Etiqueta);
 
             INSERT INTO PublicacionEtiqueta (idPublicacion, idEtiqueta)
             SELECT @id, e.id FROM Etiqueta e 
-            JOIN STRING_SPLIT(@etiquetas_csv, ',') s ON e.nombre = s.value;
+            JOIN STRING_SPLIT(@etiquetas_publicacion, ',') s ON e.nombre = s.value;
 
             COMMIT TRANSACTION;
         END TRY
         BEGIN CATCH
             IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
-            DECLARE @msg NVARCHAR(4000) = ERROR_MESSAGE();
-            RAISERROR(@msg, 16, 1);
+            THROW; 
         END CATCH
     END;
     GO
 
-    -- Falta sp_dashboard_creador y los dos triggers
+    CREATE PROCEDURE dbo.sp_dashboard_creador
+    @idCreador INT,
+    @fecha_inicio DATE,
+    @fecha_fin DATE
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+        BEGIN TRY
+            -- Dinero y Suscriptores
+            SELECT 
+                ISNULL(SUM(f.monto_total), 0) AS ingresos_totales,
+                COUNT(s.id) AS nuevos_suscriptores
+            FROM Suscripcion s
+            JOIN NivelSuscripcion ns ON s.idNivel = ns.id
+            LEFT JOIN Factura f ON f.idSuscripcion = s.id
+            WHERE ns.idCreador = @idCreador 
+            AND s.fecha_inicio BETWEEN @fecha_inicio AND @fecha_fin;
+
+            -- Top 5 fans
+            SELECT TOP 5 u.nickname, SUM(conteo) AS total_interacciones
+            FROM (
+                -- Cuenta comentarios del creador
+                SELECT idUsuario, COUNT(*) AS conteo FROM Comentario c
+                JOIN Publicacion p ON c.idPublicacion = p.id WHERE p.idCreador = @idCreador GROUP BY idUsuario
+                UNION ALL
+                -- Cuenta reacciones del creador
+                SELECT idUsuario, COUNT(*) AS conteo FROM UsuarioReaccionPublicacion urp
+                JOIN Publicacion p ON urp.idPublicacion = p.id WHERE p.idCreador = @idCreador GROUP BY idUsuario
+            ) AS resumen
+            JOIN Usuario u ON resumen.idUsuario = u.id
+            GROUP BY u.nickname
+            ORDER BY total_interacciones DESC;
+
+            -- Publicación con más puntos
+            SELECT TOP 1 
+                p.titulo,
+                ( (SELECT COUNT(*) FROM UsuarioReaccionPublicacion WHERE idPublicacion = p.id) * 1.5 + 
+                (SELECT COUNT(*) FROM Comentario WHERE idPublicacion = p.id) * 3 ) AS puntaje_viralidad
+            FROM Publicacion p
+            WHERE p.idCreador = @idCreador 
+            AND p.fecha_publicacion BETWEEN @fecha_inicio AND @fecha_fin
+            ORDER BY puntaje_viralidad DESC;
+
+        END TRY
+        BEGIN CATCH
+            THROW; 
+        END CATCH
+    END;
+    GO
+
+-- Triggers
+
+    -- Validación de aumento de precio
+    CREATE TRIGGER tr_validar_aumento_precio
+    ON NivelSuscripcion
+    AFTER UPDATE
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+
+        -- Verifica si la columna precio_actual fue la que cambió
+        IF UPDATE(precio_actual)
+        BEGIN
+            -- Se compara el precio nuevo con el viejo
+            IF EXISTS (
+                SELECT 1 
+                FROM inserted i 
+                JOIN deleted d ON i.id = d.id
+                WHERE i.precio_actual > (d.precio_actual * 1.50)
+            )
+            BEGIN
+                RAISERROR('Operación cancelada: No se permite aumentar el precio más del 50%% de una sola vez.', 16, 1);
+                ROLLBACK TRANSACTION; -- Esto deshace el UPDATE
+            END
+        END
+    END;
+    GO
+
+    -- Validación de edad para contenido NSFW
+    CREATE TRIGGER tr_validar_edad_nsfw
+    ON Suscripcion
+    AFTER INSERT
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+
+        IF EXISTS (
+            SELECT 1 
+            FROM inserted i
+            JOIN NivelSuscripcion ns ON i.idNivel = ns.id
+            JOIN Creador c ON ns.idCreador = c.idUsuario
+            JOIN Usuario u ON i.idUsuario = u.id
+            WHERE c.es_nsfw = 1 
+            AND DATEDIFF(YEAR, u.fecha_nacimiento, GETDATE()) < 18
+        )
+        BEGIN
+            RAISERROR('Contenido restringido: Debes ser mayor de 18 años para suscribirte a este creador.', 16, 1);
+            ROLLBACK TRANSACTION; -- Evita que la suscripción se guarde
+        END
+    END;
+    GO
