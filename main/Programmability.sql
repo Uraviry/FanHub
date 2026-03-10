@@ -101,6 +101,18 @@
         SELECT @precioActual = precio_actual FROM NivelSuscripcion WHERE id = @idNivel;
 
         BEGIN TRY
+            -- Validación para saber si el usuario ya está suscrito a este nivel
+            IF EXISTS (
+                SELECT 1 FROM Suscripcion 
+                WHERE idUsuario = @idUsuario 
+                  AND idNivel = @idNivel 
+                  AND estado = 'Activa'
+            )
+            BEGIN
+                RAISERROR('Ya tiene una suscripción activa para este nivel.', 16, 1);
+                RETURN; -- Con este return sale del procedimiento sin hacer nada
+            END
+
             BEGIN TRANSACTION;
 
             -- Crear suscripción
