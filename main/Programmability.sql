@@ -180,50 +180,68 @@ GO
 
     CREATE PROCEDURE dbo.sp_dashboard_creador
     @idCreador INT,
-    @fecha_inicio DATE,
-    @fecha_fin DATE
+    @fecha_inicio DATETIME,
+    @fecha_fin DATETIME
     AS
     BEGIN
         SET NOCOUNT ON;
         BEGIN TRY
-            -- Dinero y Suscriptores
-            SELECT 
-                ISNULL(SUM(f.monto_total), 0) AS ingresos_totales,
-                COUNT(s.id) AS nuevos_suscriptores
+            -- A. VARIABLES PARA KPI (Cálculos aislados)
+            DECLARE @IngresosTotales DECIMAL(10,2) = 0;
+            DECLARE @NuevosFans INT = 0;
+            DECLARE @PromedioViralidad DECIMAL(10,2) = 0;
+
+            -- Cálculo de Ingresos
+            SELECT @IngresosTotales = ISNULL(SUM(f.monto_total), 0)
+            FROM Factura f
+            JOIN Suscripcion s ON f.idSuscripcion = s.id
+            JOIN NivelSuscripcion ns ON s.idNivel = ns.id
+            WHERE ns.idCreador = @idCreador AND f.fecha_emision BETWEEN @fecha_inicio AND @fecha_fin;
+
+            -- Cálculo de Fans
+            SELECT @NuevosFans = COUNT(*)
             FROM Suscripcion s
             JOIN NivelSuscripcion ns ON s.idNivel = ns.id
-            LEFT JOIN Factura f ON f.idSuscripcion = s.id
-            WHERE ns.idCreador = @idCreador 
-            AND s.fecha_inicio BETWEEN @fecha_inicio AND @fecha_fin;
+            WHERE ns.idCreador = @idCreador AND s.fecha_inicio BETWEEN @fecha_inicio AND @fecha_fin;
 
-            -- Top 5 fans
-            SELECT TOP 5 u.nickname, SUM(conteo) AS total_interacciones
-            FROM (
-                -- Cuenta comentarios del creador
-                SELECT idUsuario, COUNT(*) AS conteo FROM Comentario c
-                JOIN Publicacion p ON c.idPublicacion = p.id WHERE p.idCreador = @idCreador GROUP BY idUsuario
-                UNION ALL
-                -- Cuenta reacciones del creador
-                SELECT idUsuario, COUNT(*) AS conteo FROM UsuarioReaccionPublicacion urp
-                JOIN Publicacion p ON urp.idPublicacion = p.id WHERE p.idCreador = @idCreador GROUP BY idUsuario
-            ) AS resumen
-            JOIN Usuario u ON resumen.idUsuario = u.id
-            GROUP BY u.nickname
-            ORDER BY total_interacciones DESC;
-
-            -- Publicación con más puntos
-            SELECT TOP 1 
-                p.titulo,
-                ( (SELECT COUNT(*) FROM UsuarioReaccionPublicacion WHERE idPublicacion = p.id) * 1.5 + 
-                (SELECT COUNT(*) FROM Comentario WHERE idPublicacion = p.id) * 3 ) AS puntaje_viralidad
+            -- Cálculo de Viralidad Promedio (Usando una tabla temporal para evitar Msg 130)
+            DECLARE @TempViralidad TABLE (Puntaje FLOAT);
+            INSERT INTO @TempViralidad
+            SELECT 
+                ((SELECT COUNT(*) FROM UsuarioReaccionPublicacion WHERE idPublicacion = p.id) * 1.5 +
+                (SELECT COUNT(*) FROM Comentario WHERE idPublicacion = p.id) * 3)
             FROM Publicacion p
-            WHERE p.idCreador = @idCreador 
-            AND p.fecha_publicacion BETWEEN @fecha_inicio AND @fecha_fin
-            ORDER BY puntaje_viralidad DESC;
+            WHERE p.idCreador = @idCreador AND p.fecha_publicacion BETWEEN @fecha_inicio AND @fecha_fin;
+
+            SELECT @PromedioViralidad = ISNULL(AVG(Puntaje), 0) FROM @TempViralidad;
+
+            -- RESULTADO 1: KPIs
+            SELECT 
+                @IngresosTotales AS [Total Ganado], 
+                @NuevosFans AS [Total Nuevos Subs],
+                @PromedioViralidad AS [Promedio Viralidad];
+
+            -- RESULTADO 2: Top 5 Fans
+            SELECT TOP 5
+                u.nickname,
+                (SELECT COUNT(*) FROM Comentario WHERE idUsuario = u.id AND idPublicacion IN (SELECT id FROM Publicacion WHERE idCreador = @idCreador)) +
+                (SELECT COUNT(*) FROM UsuarioReaccionPublicacion WHERE idUsuario = u.id AND idPublicacion IN (SELECT id FROM Publicacion WHERE idCreador = @idCreador)) AS Interacciones
+            FROM Usuario u
+            WHERE EXISTS (SELECT 1 FROM Suscripcion s INNER JOIN NivelSuscripcion ns ON s.idNivel = ns.id WHERE s.idUsuario = u.id AND ns.idCreador = @idCreador)
+            ORDER BY Interacciones DESC;
+
+            -- RESULTADO 3: Publicación Estrella
+            SELECT TOP 1
+                p.titulo,
+                ((SELECT COUNT(*) FROM UsuarioReaccionPublicacion WHERE idPublicacion = p.id) * 1.5 +
+                (SELECT COUNT(*) FROM Comentario WHERE idPublicacion = p.id) * 3) AS PuntajeMaximo
+            FROM Publicacion p
+            WHERE p.idCreador = @idCreador AND p.fecha_publicacion BETWEEN @fecha_inicio AND @fecha_fin
+            ORDER BY PuntajeMaximo DESC;
 
         END TRY
         BEGIN CATCH
-            THROW; 
+            THROW;
         END CATCH
     END;
     GO

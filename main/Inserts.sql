@@ -5368,3 +5368,495 @@ FROM (
 ) AS CombinacionesLimpias
 ORDER BY NEWID();
 GO
+
+INSERT INTO Video (idPublicacion, duracion_seg, resolucion, url_stream) VALUES
+-- Gaming (Creador ID 4)
+(1, 5400, 1080, 'https://stream.fanhub.com/vid/001_speedrun_mario.mp4'), -- Speedrun Mario 64 100% (1h 30m)
+(4, 900, 2160, 'https://stream.fanhub.com/vid/004_review_ps5pro.mp4'),  -- Review PS5 Pro (15m)
+(7, 1200, 1080, 'https://stream.fanhub.com/vid/007_vlog_e3.mp4'),       -- Vlog E3 (20m)
+(9, 7200, 1080, 'https://stream.fanhub.com/vid/009_live_fans.mp4'),     -- Jugando con fans en vivo (2h)
+(11, 450, 2160, 'https://stream.fanhub.com/vid/011_unboxing.mp4'),      -- Unboxing teclado (7.5m)
+(14, 1500, 1080, 'https://stream.fanhub.com/vid/014_gameplay.mp4'),     -- Gameplay indie (25m)
+
+-- Cocina (Creador ID 7)
+(16, 600, 1080, 'https://stream.fanhub.com/vid/016_arepas.mp4'),        -- Arepas perfectas paso a paso (10m)
+(20, 300, 720, 'https://stream.fanhub.com/vid/020_budare.mp4'),         -- Curar budare (5m)
+(23, 1800, 1080, 'https://stream.fanhub.com/vid/023_hallacas.mp4'),     -- Preparando Hallacas (30m)
+(27, 900, 1080, 'https://stream.fanhub.com/vid/027_mercado.mp4'),       -- Vlog mercado central (15m)
+
+-- Arte Digital (Creador ID 13)
+(28, 1200, 2160, 'https://stream.fanhub.com/vid/028_speedpaint.mp4'),   -- Speedpaint Cyberpunk (20m)
+(33, 400, 1080, 'https://stream.fanhub.com/vid/033_manos.mp4'),         -- Dibujar manos realistas (6.6m)
+(36, 750, 1080, 'https://stream.fanhub.com/vid/036_diseno101.mp4'),     -- Diseño de personajes 101 (12.5m)
+
+-- NSFW / Modelaje (Creador ID 218)
+(40, 120, 1080, 'https://stream.fanhub.com/vid/040_baile.mp4'),         -- Video bailando (2m)
+(43, 300, 1080, 'https://stream.fanhub.com/vid/043_bts.mp4'),           -- Detrás de cámaras (5m)
+(46, 450, 1080, 'https://stream.fanhub.com/vid/046_ropa.mp4'),          -- Probándome ropa (7.5m)
+(49, 1800, 2160, 'https://stream.fanhub.com/vid/049_asmr.mp4'),         -- ASMR sugerente (30m)
+
+-- Mascotas (Creador ID 22)
+(52, 600, 1080, 'https://stream.fanhub.com/vid/052_adiestramiento.mp4'),-- Adiestramiento canino (10m)
+(56, 400, 720, 'https://stream.fanhub.com/vid/056_banargato.mp4'),      -- Cómo bañar gato (6.6m)
+(59, 1000, 1080, 'https://stream.fanhub.com/vid/059_refugio.mp4'),      -- Vlog refugio (16.6m)
+
+-- NSFW / Modelaje 2 (Creador ID 250)
+(62, 300, 1080, 'https://stream.fanhub.com/vid/062_ejercicio.mp4'),     -- Ejercicio en casa (5m)
+(65, 60, 2160, 'https://stream.fanhub.com/vid/065_closeup.mp4'),        -- Close up (1m)
+(68, 150, 1080, 'https://stream.fanhub.com/vid/068_bano.mp4'),          -- Dándome un baño (2.5m)
+
+-- Viajes (Creador ID 33)
+(70, 1500, 2160, 'https://stream.fanhub.com/vid/070_losroques.mp4'),    -- Ruta Los Roques (25m)
+(74, 800, 1080, 'https://stream.fanhub.com/vid/074_comidacalle.mp4');   -- Comiendo calle (13m)
+GO
+
+INSERT INTO Video (idPublicacion, duracion_seg, resolucion, url_stream)
+SELECT 
+    id,
+    -- Generar duración aleatoria entre 15 y 7200 segundos
+    ABS(CHECKSUM(NEWID())) % 7186 + 15 AS duracion_seg,
+    
+    -- Elegir aleatoriamente entre las 3 resoluciones permitidas (720, 1080, 2160)
+    CASE ABS(CHECKSUM(NEWID())) % 3
+        WHEN 0 THEN 720
+        WHEN 1 THEN 1080
+        WHEN 2 THEN 2160
+    END AS resolucion,
+    
+    -- Generar una URL genérica y única basada en el ID de la publicación
+    CONCAT('https://stream.fanhub.com/vid/gen_', id, '_stream.mp4') AS url_stream
+FROM Publicacion
+WHERE tipo_contenido = 'VIDEO'
+  AND id NOT IN (
+      -- Excluir los IDs del primer bloque que contiene inserciones no automatizadas
+      1, 4, 7, 9, 11, 14, 16, 20, 23, 27, 28, 33, 36, 40, 43, 46, 49, 52, 56, 59, 62, 65, 68, 70, 74
+  );
+GO
+
+INSERT INTO Factura (idSuscripcion, codigo_transaccion, fecha_emision, sub_total, monto_impuesto, monto_total)
+SELECT 
+    id AS idSuscripcion,
+    -- Genera un código de transacción único basado en la fecha y el ID
+    CONCAT('TRX-ACT-', FORMAT(GETDATE(), 'yyyyMM'), '-', id) AS codigo_transaccion,
+    
+    -- Asigna una fecha aleatoria dentro de los últimos 28 días desde la fecha actual
+    DATEADD(DAY, - (ABS(CHECKSUM(NEWID())) % 28), GETDATE()) AS fecha_emision,
+    
+    precio_pactado AS sub_total,
+    
+    -- Calcula el 16% de impuesto
+    CAST(precio_pactado * 0.16 AS DECIMAL(10,2)) AS monto_impuesto,
+    
+    -- Suma total
+    CAST(precio_pactado * 1.16 AS DECIMAL(10,2)) AS monto_total
+FROM Suscripcion
+WHERE estado = 'Activa';
+GO
+
+UPDATE Suscripcion
+SET 
+    -- Agrega entre 1 y 180 días aleatorios a la fecha de inicio
+    fecha_fin = DATEADD(DAY, ABS(CHECKSUM(NEWID())) % 178 + 1, fecha_inicio)
+WHERE 
+    estado = 'Cancelada';
+GO
+
+-- Añadiendo un Creador estrictamente Polémico para el Reporte 9
+
+-- Creamos al usuario trol
+INSERT INTO Usuario (email, password_hash, nickname, fecha_registro, fecha_nacimiento, pais, esta_activo)
+VALUES ('elpolemico@fanhub.com', 'hash123', 'ElPolemico', GETDATE(), '2000-01-01', 'VE', 1);
+
+-- Capturamos el ID del usuario recién creado
+DECLARE @IdTrol INT = SCOPE_IDENTITY();
+
+-- Lo convertimos en Creador (asignándole la categoría 1)
+INSERT INTO Creador (idUsuario, biografia, banco_nombre, banco_cuenta, es_nsfw, idCategoria)
+VALUES (@IdTrol, 'Me gusta ver el mundo arder', 'Banesco', 01341122334455667788, 0, 1);
+
+-- PUBLICACIÓN POLÉMICA 1
+INSERT INTO Publicacion (idCreador, titulo, fecha_publicacion, es_publica, tipo_contenido)
+VALUES (@IdTrol, 'Por qué la arepa es de Colombia y no de Venezuela', GETDATE(), 1, 'TEXTO');
+DECLARE @IdPub1 INT = SCOPE_IDENTITY();
+
+INSERT INTO Texto (idPublicacion, contenido_html, resumen_gratuito)
+VALUES (@IdPub1, '<p>Es la verdad histórica y punto. Leo sus quejas.</p>', 'Opinión impopular');
+
+-- 1 Reacción
+INSERT INTO UsuarioReaccionPublicacion (idUsuario, idPublicacion, idTipoReaccion, fecha_reaccion)
+VALUES (1, @IdPub1, 1, GETDATE());
+
+-- 10 Comentarios
+INSERT INTO Comentario (idUsuario, idPublicacion, idComentarioPadre, texto, fecha)
+SELECT TOP 10 id, @IdPub1, NULL, '¡Qué locura estás diciendo!', GETDATE()
+FROM Usuario WHERE id != @IdTrol;
+
+-- PUBLICACIÓN POLÉMICA 2
+INSERT INTO Publicacion (idCreador, titulo, fecha_publicacion, es_publica, tipo_contenido)
+VALUES (@IdTrol, 'Windows es mucho mejor que Linux para programar', GETDATE(), 1, 'TEXTO');
+DECLARE @IdPub2 INT = SCOPE_IDENTITY();
+
+INSERT INTO Texto (idPublicacion, contenido_html, resumen_gratuito)
+VALUES (@IdPub2, '<p>Los que usan Linux solo quieren complicarse la vida.</p>', 'Opinión Tech');
+
+-- 2 Reacciones
+INSERT INTO UsuarioReaccionPublicacion (idUsuario, idPublicacion, idTipoReaccion, fecha_reaccion)
+VALUES (2, @IdPub2, 1, GETDATE()), (3, @IdPub2, 2, GETDATE());
+
+-- 12 Comentarios
+INSERT INTO Comentario (idUsuario, idPublicacion, idComentarioPadre, texto, fecha)
+SELECT TOP 12 id, @IdPub2, NULL, 'No sabes de lo que hablas', GETDATE()
+FROM Usuario WHERE id NOT IN (@IdTrol, 1);
+GO
+
+-- 1. Buscamos el ID del creador que insertamos en el paso anterior
+DECLARE @IdTrol INT = (SELECT id FROM Usuario WHERE nickname = 'ElPolemico');
+
+-- PUBLICACIÓN NORMAL 1 (Imagen)
+INSERT INTO Publicacion (idCreador, titulo, fecha_publicacion, es_publica, tipo_contenido)
+VALUES (@IdTrol, 'Mi nuevo setup de programación 💻', GETDATE(), 1, 'IMAGEN');
+DECLARE @IdPub3 INT = SCOPE_IDENTITY();
+
+INSERT INTO Imagen (idPublicacion, ancho, alto, formato, alt_text, url_imagen)
+VALUES (@IdPub3, 1920, 1080, 'jpg', 'Setup con dos monitores', 'https://fanhub.com/img/setup_trol.jpg');
+
+-- Le ponemos 15 Reacciones (muchos likes)
+INSERT INTO UsuarioReaccionPublicacion (idUsuario, idPublicacion, idTipoReaccion, fecha_reaccion)
+SELECT TOP 15 id, @IdPub3, 1, GETDATE()
+FROM Usuario 
+WHERE id != @IdTrol;
+
+-- Le ponemos solo 1 Comentario (Ratio = 1 / 15 = 0.06)
+INSERT INTO Comentario (idUsuario, idPublicacion, idComentarioPadre, texto, fecha)
+SELECT TOP 1 id, @IdPub3, NULL, '¡Qué buen setup bro, felicidades!', GETDATE()
+FROM Usuario 
+WHERE id != @IdTrol;
+
+-- PUBLICACIÓN NORMAL 2 (Texto)
+INSERT INTO Publicacion (idCreador, titulo, fecha_publicacion, es_publica, tipo_contenido)
+VALUES (@IdTrol, 'Feliz lunes a todos mis seguidores', GETDATE(), 1, 'TEXTO');
+DECLARE @IdPub4 INT = SCOPE_IDENTITY();
+
+INSERT INTO Texto (idPublicacion, contenido_html, resumen_gratuito)
+VALUES (@IdPub4, '<p>Espero que tengan una excelente semana llena de éxitos.</p>', 'Saludos');
+
+-- Le ponemos 20 Reacciones (Likes y Corazones)
+INSERT INTO UsuarioReaccionPublicacion (idUsuario, idPublicacion, idTipoReaccion, fecha_reaccion)
+SELECT TOP 20 id, @IdPub4, 2, GETDATE()
+FROM Usuario 
+WHERE id != @IdTrol;
+
+-- Le ponemos solo 2 Comentarios (Ratio = 2 / 20 = 0.10)
+INSERT INTO Comentario (idUsuario, idPublicacion, idComentarioPadre, texto, fecha)
+SELECT TOP 2 id, @IdPub4, NULL, 'Igualmente para ti.', GETDATE()
+FROM Usuario 
+WHERE id NOT IN (@IdTrol, 1);
+GO
+
+DELETE FROM Imagen;
+WITH DatosValidados AS (
+    SELECT 
+        id,
+        -- Generamos un número del 1 al 5 para la resolución
+        (ABS(CHECKSUM(NEWID())) % 5) + 1 AS Caso,
+        -- Generamos un número del 1 al 2 para el formato (1=jpg, 2=png)
+        (ABS(CHECKSUM(NEWID())) % 2) + 1 AS FormatoID
+    FROM Publicacion
+    WHERE tipo_contenido = 'IMAGEN'
+)
+INSERT INTO Imagen (idPublicacion, ancho, alto, formato, alt_text, url_imagen)
+SELECT 
+    id,
+    CASE Caso
+        WHEN 1 THEN 1080 -- Cuadrado
+        WHEN 2 THEN 1920 -- Full HD
+        WHEN 3 THEN 3840 -- 4K
+        WHEN 4 THEN 720  -- HD Vertical
+        WHEN 5 THEN 1440 -- 2K
+        ELSE 1080        -- Respaldo anti-NULL
+    END,
+    CASE Caso
+        WHEN 1 THEN 1080 
+        WHEN 2 THEN 1080 
+        WHEN 3 THEN 2160 
+        WHEN 4 THEN 1280 
+        WHEN 5 THEN 2560 
+        ELSE 1080        -- Respaldo anti-NULL
+    END,
+    CASE FormatoID
+        WHEN 1 THEN 'jpg'
+        WHEN 2 THEN 'png'
+        ELSE 'jpg'       -- Respaldo estricto al PDF
+    END,
+    'Imagen del post ' + CAST(id AS VARCHAR),
+    'https://fanhub.com/cdn/img_' + CAST(id AS VARCHAR) + 
+    CASE WHEN FormatoID = 1 THEN '.jpg' ELSE '.png' END
+FROM DatosValidados;
+GO
+
+-- Creador multimedia
+-- Creamos al usuario purista
+INSERT INTO Usuario (email, password_hash, nickname, fecha_registro, fecha_nacimiento, pais, esta_activo)
+VALUES ('multimedia@fanhub.com', 'hash123', 'CineastaPuro', GETDATE(), '1995-05-05', 'ES', 1);
+
+DECLARE @IdMulti INT = SCOPE_IDENTITY();
+
+-- Lo hacemos creador NO NSFW (es_nsfw = 0)
+INSERT INTO Creador (idUsuario, biografia, banco_nombre, banco_cuenta, es_nsfw, idCategoria)
+VALUES (@IdMulti, 'Solo cine, fotografía y arte visual.', 'BBVA', 01340000111122223333, 0, 1);
+
+-- PUBLICACIÓN 1: VIDEO
+INSERT INTO Publicacion (idCreador, titulo, fecha_publicacion, es_publica, tipo_contenido)
+VALUES (@IdMulti, 'Mi nuevo cortometraje', GETDATE(), 1, 'VIDEO');
+
+DECLARE @IdVid INT = SCOPE_IDENTITY();
+
+INSERT INTO Video (idPublicacion, duracion_seg, resolucion, url_stream) 
+VALUES (@IdVid, 900, 1080, 'https://stream.fanhub.com/corto.mp4');
+
+-- PUBLICACIÓN 2: IMAGEN
+INSERT INTO Publicacion (idCreador, titulo, fecha_publicacion, es_publica, tipo_contenido)
+VALUES (@IdMulti, 'Póster oficial del corto', GETDATE(), 1, 'IMAGEN');
+
+DECLARE @IdImg INT = SCOPE_IDENTITY();
+
+INSERT INTO Imagen (idPublicacion, ancho, alto, formato, alt_text, url_imagen) 
+VALUES (@IdImg, 1080, 1920, 'png', 'Poster Oficial', 'https://img.fanhub.com/poster.png');
+
+-- Le agregamos un par de reacciones para que la función fn_calcular_reputacion no devuelva 0
+INSERT INTO UsuarioReaccionPublicacion (idUsuario, idPublicacion, idTipoReaccion, fecha_reaccion)
+VALUES 
+(1, @IdVid, 1, GETDATE()),
+(2, @IdVid, 2, GETDATE()),
+(3, @IdImg, 1, GETDATE());
+GO
+
+-- Obtenemos el ID del creador CineastaPuro
+DECLARE @IdMulti INT = (SELECT id FROM Usuario WHERE nickname = 'CineastaPuro');
+
+-- Le creamos un Nivel de Suscripción
+INSERT INTO NivelSuscripcion (idCreador, nombre, descripcion, precio_actual, esta_activo, orden)
+VALUES (@IdMulti, 'Cinéfilo VIP', 'Acceso a detrás de escenas y cortes del director.', 15.00, 1, 1);
+
+DECLARE @IdNivelMulti INT = SCOPE_IDENTITY();
+
+-- Le asignamos 5 suscriptores activos (Usaremos los usuarios con ID del 1 al 5)
+INSERT INTO Suscripcion (idUsuario, idNivel, fecha_inicio, fecha_renovacion, fecha_fin, estado, precio_pactado)
+VALUES 
+(1, @IdNivelMulti, DATEADD(MONTH, -1, GETDATE()), DATEADD(MONTH, 1, GETDATE()), NULL, 'Activa', 15.00),
+(2, @IdNivelMulti, DATEADD(MONTH, -2, GETDATE()), DATEADD(MONTH, 1, GETDATE()), NULL, 'Activa', 15.00),
+(3, @IdNivelMulti, DATEADD(MONTH, -3, GETDATE()), DATEADD(MONTH, 1, GETDATE()), NULL, 'Activa', 15.00),
+(4, @IdNivelMulti, DATEADD(MONTH, -1, GETDATE()), DATEADD(MONTH, 1, GETDATE()), NULL, 'Activa', 15.00),
+(5, @IdNivelMulti, DATEADD(MONTH, -2, GETDATE()), DATEADD(MONTH, 1, GETDATE()), NULL, 'Activa', 15.00);
+
+-- Generamos las facturas de esos 5 nuevos suscriptores para no dejar data huérfana
+INSERT INTO Factura (idSuscripcion, codigo_transaccion, fecha_emision, sub_total, monto_impuesto, monto_total)
+SELECT 
+    id, 
+    CONCAT('TRX-CINE-', id), 
+    fecha_inicio, 
+    precio_pactado, 
+    CAST(precio_pactado * 0.16 AS DECIMAL(10,2)), -- 16% de IVA
+    CAST(precio_pactado * 1.16 AS DECIMAL(10,2))  -- Total
+FROM Suscripcion
+WHERE idNivel = @IdNivelMulti;
+GO
+
+-- Creamos al usuario que nunca interactúa (Usamos 'VE' respetando tu VARCHAR(2))
+INSERT INTO Usuario (email, password_hash, nickname, fecha_registro, fecha_nacimiento, pais, esta_activo)
+VALUES ('silencioso@fanhub.com', 'hash123', 'ElFantasma', GETDATE(), '1990-10-10', 'VE', 1);
+
+-- Capturamos su ID
+DECLARE @IdLurker INT = SCOPE_IDENTITY();
+
+-- Buscamos el primer nivel de suscripción activo que exista en la base de datos
+DECLARE @IdNivel INT = (SELECT TOP 1 id FROM NivelSuscripcion WHERE esta_activo = 1);
+
+-- Le creamos una suscripción activa a ese nivel
+INSERT INTO Suscripcion (idUsuario, idNivel, fecha_inicio, fecha_renovacion, estado, precio_pactado)
+VALUES (@IdLurker, @IdNivel, DATEADD(MONTH, -2, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 20.00);
+
+DECLARE @IdSubLurker INT = SCOPE_IDENTITY();
+
+-- Le generamos un par de facturas históricas para que tenga un "Monto Gastado" acumulado
+INSERT INTO Factura (idSuscripcion, codigo_transaccion, fecha_emision, sub_total, monto_impuesto, monto_total)
+VALUES 
+(@IdSubLurker, 'TRX-LURK-01', DATEADD(MONTH, -2, GETDATE()), 20.00, 3.20, 23.20),
+(@IdSubLurker, 'TRX-LURK-02', DATEADD(MONTH, -1, GETDATE()), 20.00, 3.20, 23.20);
+GO
+
+-- Creamos al usuario (País 'CH' - Suiza, por ejemplo)
+INSERT INTO Usuario (email, password_hash, nickname, fecha_registro, fecha_nacimiento, pais, esta_activo)
+VALUES ('mecenas@fanhub.com', 'hash123', 'MecenasAnonimo', GETDATE(), '1980-01-01', 'CH', 1);
+
+DECLARE @IdBallena INT = SCOPE_IDENTITY();
+
+-- Seleccionamos un creador cualquiera para que sea su "ídolo"
+DECLARE @IdCreadorCualquiera INT = (SELECT TOP 1 idUsuario FROM Creador);
+
+-- Creamos un NIVEL DE SUSCRIPCIÓN de alto costo para ese creador
+-- (Así justificamos el gasto de $250)
+INSERT INTO NivelSuscripcion (idCreador, nombre, descripcion, precio_actual, esta_activo, orden)
+VALUES (@IdCreadorCualquiera, 'Nivel Diamante / Patrocinio', 'Soporte total al canal', 250.00, 1, 99);
+
+DECLARE @IdNivelCaro INT = SCOPE_IDENTITY();
+
+-- Creamos la suscripción vinculada a ese nivel específico
+INSERT INTO Suscripcion (idUsuario, idNivel, fecha_inicio, fecha_renovacion, estado, precio_pactado)
+VALUES (@IdBallena, @IdNivelCaro, DATEADD(MONTH, -3, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 250.00);
+
+DECLARE @IdSubBallena INT = SCOPE_IDENTITY();
+
+-- Generamos las facturas con el precio real del nivel ($250 + IVA)
+-- Subtotal: 250.00 | IVA 16%: 40.00 | Total: 290.00
+INSERT INTO Factura (idSuscripcion, codigo_transaccion, fecha_emision, sub_total, monto_impuesto, monto_total)
+VALUES 
+(@IdSubBallena, 'TX-DIAMANTE-01', DATEADD(MONTH, -3, GETDATE()), 250.00, 40.00, 290.00),
+(@IdSubBallena, 'TX-DIAMANTE-02', DATEADD(MONTH, -2, GETDATE()), 250.00, 40.00, 290.00),
+(@IdSubBallena, 'TX-DIAMANTE-03', DATEADD(MONTH, -1, GETDATE()), 250.00, 40.00, 290.00);
+GO
+
+-- Buscamos la suscripción activa de MecenasAnonimo
+DECLARE @IdSubMecenas INT = (
+    SELECT TOP 1 S.id 
+    FROM Suscripcion S
+    INNER JOIN Usuario U ON S.idUsuario = U.id
+    WHERE U.nickname = 'MecenasAnonimo'
+);
+
+-- Le generamos una factura con la fecha de hoy
+INSERT INTO Factura (idSuscripcion, codigo_transaccion, fecha_emision, sub_total, monto_impuesto, monto_total)
+VALUES 
+(@IdSubMecenas, 'TX-DIAMANTE-04', GETDATE(), 250.00, 40.00, 290.00);
+GO
+
+-- CREADOR: Fotógrafa de Paisajes (Solo Imágenes)
+INSERT INTO Usuario (email, password_hash, nickname, fecha_registro, fecha_nacimiento, pais, esta_activo)
+VALUES ('nature@fanhub.com', 'pass123', 'EcoVisual', GETDATE(), '1992-08-15', 'AR', 1);
+
+DECLARE @IdEco INT = SCOPE_IDENTITY();
+
+INSERT INTO Creador (idUsuario, biografia, banco_nombre, banco_cuenta, es_nsfw, idCategoria)
+VALUES (@IdEco, 'Capturando la esencia de la Patagonia.', 'Santander', 01349988776655443322, 0, 1);
+
+-- Publicamos 3 Imágenes (Sin Texto)
+INSERT INTO Publicacion (idCreador, titulo, fecha_publicacion, es_publica, tipo_contenido)
+VALUES (@IdEco, 'Amanecer en el Glaciar', GETDATE(), 1, 'IMAGEN'),
+       (@IdEco, 'Bosques de Arrayanes', GETDATE(), 1, 'IMAGEN'),
+       (@IdEco, 'Cóndor en vuelo', GETDATE(), 1, 'IMAGEN');
+
+-- Insertamos los datos técnicos de las imágenes (usando IDs correlativos)
+INSERT INTO Imagen (idPublicacion, ancho, alto, formato, alt_text, url_imagen)
+SELECT id, 3840, 2160, 'jpg', 'Paisaje HD', 'https://img.com/eco_' + CAST(id AS VARCHAR) + '.jpg'
+FROM Publicacion WHERE idCreador = @IdEco;
+
+-- CREADOR: Animador 3D (Solo Videos)
+INSERT INTO Usuario (email, password_hash, nickname, fecha_registro, fecha_nacimiento, pais, esta_activo)
+VALUES ('animator@fanhub.com', 'pass123', 'PixelArt3D', GETDATE(), '1998-03-20', 'MX', 1);
+
+DECLARE @IdPixel INT = SCOPE_IDENTITY();
+
+INSERT INTO Creador (idUsuario, biografia, banco_nombre, banco_cuenta, es_nsfw, idCategoria)
+VALUES (@IdPixel, 'Animaciones cortas y renders realistas.', 'Banamex', 01341111222233334444, 0, 1);
+
+-- Publicamos 2 Videos (Sin Texto)
+INSERT INTO Publicacion (idCreador, titulo, fecha_publicacion, es_publica, tipo_contenido)
+VALUES (@IdPixel, 'Render de habitación Cyberpunk', GETDATE(), 1, 'VIDEO'),
+       (@IdPixel, 'Loop infinito de agua', GETDATE(), 1, 'VIDEO');
+
+-- Insertamos los datos técnicos de los videos
+INSERT INTO Video (idPublicacion, duracion_seg, resolucion, url_stream)
+SELECT id, 60, 1080, 'https://video.com/pixel_' + CAST(id AS VARCHAR) + '.mp4'
+FROM Publicacion WHERE idCreador = @IdPixel;
+
+-- SUSCRIPTORES PARA AMBOS (Para que aparezcan con puntos)
+-- Nivel para EcoVisual
+INSERT INTO NivelSuscripcion (idCreador, nombre, precio_actual, esta_activo, orden)
+VALUES (@IdEco, 'Explorador', 5.00, 1, 1);
+DECLARE @NivelEco INT = SCOPE_IDENTITY();
+
+-- Nivel para PixelArt3D
+INSERT INTO NivelSuscripcion (idCreador, nombre, precio_actual, esta_activo, orden)
+VALUES (@IdPixel, 'Render VIP', 12.00, 1, 1);
+DECLARE @NivelPixel INT = SCOPE_IDENTITY();
+
+-- Suscribimos a un par de usuarios existentes
+INSERT INTO Suscripcion (idUsuario, idNivel, fecha_inicio, estado, precio_pactado)
+VALUES (1, @NivelEco, GETDATE(), 'Activa', 5.00),
+       (2, @NivelEco, GETDATE(), 'Activa', 5.00),
+       (3, @NivelPixel, GETDATE(), 'Activa', 12.00);
+GO
+
+-- Capturamos los IDs de los niveles que creamos antes
+DECLARE @NivelCine INT = (SELECT id FROM NivelSuscripcion WHERE nombre = 'Cinéfilo VIP');
+DECLARE @NivelEco INT = (SELECT id FROM NivelSuscripcion WHERE nombre = 'Explorador');
+DECLARE @NivelPixel INT = (SELECT id FROM NivelSuscripcion WHERE nombre = 'Render VIP');
+
+-- Añadimos suscriptores a CineastaPuro (Usuarios 6 al 10)
+INSERT INTO Suscripcion (idUsuario, idNivel, fecha_inicio, fecha_renovacion, estado, precio_pactado)
+VALUES 
+(6, @NivelCine, DATEADD(DAY, -15, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 15.00),
+(7, @NivelCine, DATEADD(DAY, -10, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 15.00),
+(8, @NivelCine, DATEADD(DAY, -5, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 15.00),
+(9, @NivelCine, DATEADD(DAY, -2, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 15.00),
+(10, @NivelCine, GETDATE(), DATEADD(MONTH, 1, GETDATE()), 'Activa', 15.00);
+
+-- Añadimos suscriptores a EcoVisual (Usuarios 11 al 15)
+INSERT INTO Suscripcion (idUsuario, idNivel, fecha_inicio, fecha_renovacion, estado, precio_pactado)
+VALUES 
+(11, @NivelEco, DATEADD(DAY, -20, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 5.00),
+(12, @NivelEco, DATEADD(DAY, -18, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 5.00),
+(13, @NivelEco, DATEADD(DAY, -12, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 5.00),
+(14, @NivelEco, DATEADD(DAY, -8, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 5.00),
+(15, @NivelEco, DATEADD(DAY, -1, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 5.00);
+
+-- Añadimos suscriptores a PixelArt3D (Usuarios 16 al 20)
+INSERT INTO Suscripcion (idUsuario, idNivel, fecha_inicio, fecha_renovacion, estado, precio_pactado)
+VALUES 
+(16, @NivelPixel, DATEADD(DAY, -25, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 12.00),
+(17, @NivelPixel, DATEADD(DAY, -22, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 12.00),
+(18, @NivelPixel, DATEADD(DAY, -14, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 12.00),
+(19, @NivelPixel, DATEADD(DAY, -7, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 12.00),
+(20, @NivelPixel, DATEADD(DAY, -3, GETDATE()), DATEADD(MONTH, 1, GETDATE()), 'Activa', 12.00);
+
+-- Generamos las facturas para todas estas nuevas suscripciones
+-- Esto asegura que los reportes de ingresos también se vean poblados
+INSERT INTO Factura (idSuscripcion, codigo_transaccion, fecha_emision, sub_total, monto_impuesto, monto_total)
+SELECT 
+    id, 
+    CONCAT('FX-NEW-', id), 
+    fecha_inicio, 
+    precio_pactado, 
+    CAST(precio_pactado * 0.16 AS DECIMAL(10,2)),
+    CAST(precio_pactado * 1.16 AS DECIMAL(10,2))
+FROM Suscripcion
+WHERE idNivel IN (@NivelCine, @NivelEco, @NivelPixel)
+  AND id NOT IN (SELECT idSuscripcion FROM Factura); -- Para no duplicar facturas de las suscripciones anteriores
+GO
+
+UPDATE TOP (50) Publicacion
+SET fecha_publicacion = GETDATE()
+WHERE id IN (
+    -- Seleccionamos solo IDs que sabemos que tienen al menos una etiqueta
+    SELECT DISTINCT idPublicacion 
+    FROM PublicacionEtiqueta
+);
+GO
+
+INSERT INTO PublicacionEtiqueta (idPublicacion, idEtiqueta)
+SELECT 
+    p.id AS idPublicacion, 
+    e.id AS idEtiqueta
+FROM Publicacion p
+CROSS APPLY (
+    SELECT TOP 1 id 
+    FROM Etiqueta 
+    ORDER BY NEWID()
+) e
+WHERE NOT EXISTS (
+    -- Solo afectamos a las publicaciones que no tienen etiquetas
+    SELECT 1 
+    FROM PublicacionEtiqueta pe 
+    WHERE pe.idPublicacion = p.id
+);
+GO

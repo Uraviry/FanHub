@@ -4,24 +4,28 @@ GO
 -- 1
 PRINT 'Generando Reporte 1: Clasificación de Ganancias...';
 
-SELECT
-	U.nickname AS Nickname,
-	C.nombre AS Categoria,
-	(
-		SELECT COUNT(*)
-		FROM Suscripcion S
-		INNER JOIN NivelSuscripcion NS ON S.idNivel = NS.id
-		WHERE NS.idCreador = Cr.idUsuario AND S.estado = 'Activa'
-	) AS [Total Suscriptores Activos],
-	ISNULL(SUM(F.monto_total), 0) AS [Monto Facturado],
-	dbo.fn_clasificar_ingreso(ISNULL(SUM(F.monto_total), 0)) AS [Clasificación]
-FROM Usuario U
-INNER JOIN Creador Cr ON U.id = Cr.idUsuario
-INNER JOIN Categoria C ON Cr.idCategoria = C.id
-LEFT JOIN NivelSuscripcion NS ON Cr.idUsuario = NS.idCreador
-LEFT JOIN Suscripcion S ON NS.id = S.idNivel
-LEFT JOIN Factura F ON S.id = F.idSuscripcion AND F.fecha_emision >= DATEADD(MONTH, -1, GETDATE())
-GROUP BY U.nickname, C.nombre, Cr.idUsuario
+WITH GananciasPrevias AS (
+    SELECT
+        U.nickname AS Nickname,
+        C.nombre AS Categoria,
+        Cr.idUsuario,
+        ISNULL(SUM(F.monto_total), 0) AS MontoTotal
+    FROM Usuario U
+    INNER JOIN Creador Cr ON U.id = Cr.idUsuario
+    INNER JOIN Categoria C ON Cr.idCategoria = C.id
+    LEFT JOIN NivelSuscripcion NS ON Cr.idUsuario = NS.idCreador
+    LEFT JOIN Suscripcion S ON NS.id = S.idNivel
+    LEFT JOIN Factura F ON S.id = F.idSuscripcion AND F.fecha_emision >= DATEADD(MONTH, -1, GETDATE())
+    GROUP BY U.nickname, C.nombre, Cr.idUsuario
+)
+SELECT 
+    Nickname,
+    Categoria,
+    (SELECT COUNT(*) FROM Suscripcion S INNER JOIN NivelSuscripcion NS ON S.idNivel = NS.id 
+     WHERE NS.idCreador = G.idUsuario AND S.estado = 'Activa') AS [Total Suscriptores Activos],
+    MontoTotal AS [Monto Facturado],
+    dbo.fn_clasificar_ingreso(MontoTotal) AS [Clasificación] -- Ahora sí funciona porque MontoTotal ya está sumado
+FROM GananciasPrevias G
 ORDER BY [Monto Facturado] DESC;
 GO
 
@@ -84,7 +88,7 @@ INNER JOIN NivelSuscripcion NS ON S.idNivel = NS.id
 INNER JOIN Usuario U ON NS.idCreador = U.id
 WHERE S.estado = 'Cancelada'
 GROUP BY U.nickname, NS.nombre, NS.orden
-ORDER BY NS.orden ASC;
+ORDER BY U.nickname ASC, NS.orden ASC;
 
 -- 5
 PRINT 'Generando Reporte 5: Tiempo y Peso de Contenido (Gaming)...';
@@ -151,38 +155,57 @@ SELECT
 		ELSE 'X'
 	END AS [Generación],
 	COUNT(DISTINCT U.id) AS [Cantidad Usuarios Activos],
-	AVG(Mensual.TotalMes) AS [Gasto Promedio Mensual]
-FROM Usuario U
-LEFT JOIN (
-	SELECT S.idUsuario, SUM(F.monto_total) as TotalMes
-	FROM Factura F
-	INNER JOIN Suscripcion S ON F.idSuscripcion = S.id
-	WHERE F.fecha_emision >= DATEADD(MONTH, -1, GETDATE())
-	GROUP BY S.idUsuario
-) Mensual ON U.id = Mensual.idUsuario
-WHERE U.esta_activo = 1
-GROUP BY
-	CASE
-		WHEN YEAR(fecha_nacimiento) > 2000 THEN 'Gen Z'
-		WHEN YEAR(fecha_nacimiento) BETWEEN 1981 AND 2000 THEN 'Millennials'
-		ELSE 'X'
+	
+	-- Usamos ISNULL para que si una generación no ha gastado nada, muestre 0 y no NULL
+	CAST(ISNULL(AVG(Historial.PromedioUsuario), 0) AS DECIMAL(10,2)) AS [Gasto Promedio Mensual]
+	FROM Usuario U
+	LEFT JOIN (
+		-- Calculamos el promedio mensual general de ese usuario
+		SELECT idUsuario, AVG(TotalPorMes) AS PromedioUsuario
+		FROM (
+			-- Sumamos cuánto gastó el usuario en cada mes de cada año históricamente
+			SELECT 
+				S.idUsuario, 
+				YEAR(F.fecha_emision) AS Anio, 
+				MONTH(F.fecha_emision) AS Mes, 
+				SUM(F.monto_total) AS TotalPorMes
+			FROM Factura F
+			INNER JOIN Suscripcion S ON F.idSuscripcion = S.id
+			GROUP BY S.idUsuario, YEAR(F.fecha_emision), MONTH(F.fecha_emision)
+		) GastosAgrupados
+		GROUP BY idUsuario
+	) Historial ON U.id = Historial.idUsuario
+	WHERE U.esta_activo = 1
+	GROUP BY
+		CASE
+			WHEN YEAR(fecha_nacimiento) > 2000 THEN 'Gen Z'
+			WHEN YEAR(fecha_nacimiento) BETWEEN 1981 AND 2000 THEN 'Millennials'
+			ELSE 'X'
 	END;
+GO
 
 -- 9
 PRINT 'Generando Reporte 9: Creadores Polémicos...';
 
-SELECT
-	U.nickname,
-	COUNT(P.id) AS [Cantidad Posts Evaluados],
-	AVG(
-		CAST((SELECT COUNT(*) FROM Comentario WHERE idPublicacion = P.id) AS FLOAT) /
-		NULLIF((SELECT COUNT(*) FROM UsuarioReaccionPublicacion WHERE idPublicacion = P.id), 0)
-	) AS [Ratio Promedio]
-FROM Publicacion P
-INNER JOIN Usuario U ON P.idCreador = U.id
-GROUP BY U.id, U.nickname
-HAVING AVG(CAST((SELECT COUNT(*) FROM Comentario WHERE idPublicacion = P.id) AS FLOAT) /
-	NULLIF((SELECT COUNT(*) FROM UsuarioReaccionPublicacion WHERE idPublicacion = P.id), 0)) > 2.0;
+WITH RatiosPorPublicacion AS (
+    SELECT 
+        p.idCreador,
+        p.id AS idPublicacion,
+        -- Calculamos el ratio de cada post de forma aislada
+        CAST((SELECT COUNT(*) FROM Comentario WHERE idPublicacion = p.id) AS FLOAT) /
+        NULLIF((SELECT COUNT(*) FROM UsuarioReaccionPublicacion WHERE idPublicacion = p.id), 0) AS Ratio
+    FROM Publicacion p
+	)
+	SELECT
+		u.nickname,
+		COUNT(r.idPublicacion) AS [Cantidad Posts Evaluados],
+		AVG(r.Ratio) AS [Ratio Promedio]
+	FROM RatiosPorPublicacion r
+	INNER JOIN Usuario u ON r.idCreador = u.id
+	GROUP BY u.id, u.nickname
+	HAVING AVG(r.Ratio) > 2.0  -- Ahora el AVG es sobre un valor simple, no una subconsulta
+	ORDER BY [Ratio Promedio] DESC;
+	GO
 
 -- 10
 PRINT 'Generando Reporte 10: Ranking de Creadores (Reputación)...';
@@ -245,17 +268,28 @@ HAVING COUNT(DISTINCT URP.idTipoReaccion) = (SELECT COUNT(*) FROM TipoReaccion);
 -- 14
 PRINT 'Generando Reporte 14: Reporte de Nómina (Liquidación)...';
 
-SELECT
-	Cr.banco_nombre AS [Nombre Banco],
-	Cr.banco_cuenta AS [Cuenta Bancaria],
-	U.nickname AS Beneficiario,
-	SUM(F.monto_total) AS [Total Facturado (Bruto)],
-	SUM(F.monto_total) * 0.20 AS [Comisión FanHub],
-	SUM(F.monto_total) * 0.80 AS [Monto a Transferir (Neto)]
-FROM Factura F
-INNER JOIN Suscripcion S ON F.idSuscripcion = S.id
-INNER JOIN NivelSuscripcion NS ON S.idNivel = NS.id
-INNER JOIN Creador Cr ON NS.idCreador = Cr.idUsuario
-INNER JOIN Usuario U ON Cr.idUsuario = U.id
-WHERE MONTH(F.fecha_emision) = MONTH(GETDATE()) AND YEAR(F.fecha_emision) = YEAR(GETDATE())
-GROUP BY Cr.banco_nombre, Cr.banco_cuenta, U.nickname;
+WITH LiquidacionPrevia AS (
+    SELECT
+        Cr.banco_nombre AS [Nombre Banco],
+        Cr.banco_cuenta AS [Cuenta Bancaria],
+        U.nickname AS Beneficiario,
+        ISNULL(SUM(F.monto_total), 0) AS TotalBruto
+    FROM Creador Cr
+    INNER JOIN Usuario U ON Cr.idUsuario = U.id
+    INNER JOIN NivelSuscripcion NS ON Cr.idUsuario = NS.idCreador
+    INNER JOIN Suscripcion S ON NS.id = S.idNivel
+    INNER JOIN Factura F ON S.id = F.idSuscripcion
+    WHERE F.fecha_emision >= DATEADD(MONTH, -1, GETDATE())
+    GROUP BY Cr.banco_nombre, Cr.banco_cuenta, U.nickname, Cr.idUsuario
+	)
+	SELECT 
+		[Nombre Banco],
+		[Cuenta Bancaria],
+		Beneficiario,
+		TotalBruto AS [Total Facturado (Bruto)],
+		(TotalBruto * 0.20) AS [Comisión FanHub (20%)],
+		(TotalBruto * 0.80) AS [Neto a Pagar],
+		dbo.fn_clasificar_ingreso(TotalBruto) AS [Rango de Éxito]
+	FROM LiquidacionPrevia
+	ORDER BY [Neto a Pagar] DESC;
+	GO
