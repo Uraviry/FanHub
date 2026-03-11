@@ -1,3 +1,5 @@
+USE FanHub;
+GO
 -- Funciones UDF
     -- Función para calcular el impuesto (IVA 16%)
     CREATE FUNCTION dbo.fn_calcular_impuesto (@monto DECIMAL(10,2))
